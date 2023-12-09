@@ -1,0 +1,288 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_ARTISTAS 100
+#define MAX_NOME 50
+#define MAX_GENERO 30
+#define MAX_LOCAL 50
+#define MAX_ALBUMS 50
+
+typedef struct {
+    char nome[MAX_NOME];
+    char genero[MAX_GENERO];
+    char local[MAX_LOCAL];
+    char albums[MAX_ALBUMS][MAX_NOME];
+    int numAlbums;
+} Artista;
+
+int compararNomes(const void *a, const void *b) {
+    return strcmp(((Artista *)a)->nome, ((Artista *)b)->nome);
+}
+
+int lerArtistas(Artista artistas[]) {
+    FILE *arquivo = fopen("artistas.txt", "r");
+    if (arquivo == NULL) {
+        printf("Erro ao abrir o arquivo artistas.txt.\n");
+        return 0;
+    }
+
+    int numArtistas = 0;
+    char linha[MAX_NOME];
+
+    while (fgets(linha, sizeof(linha), arquivo) != NULL) {
+        if (strcmp(linha, "===========\n") == 0) {
+            numArtistas++;
+            continue;
+        }
+
+        linha[strcspn(linha, "\n")] = '\0';
+
+        switch (numArtistas % 4) {
+            case 0:
+                strcpy(artistas[numArtistas / 4].nome, linha);
+                break;
+            case 1:
+                strcpy(artistas[numArtistas / 4].genero, linha);
+                break;
+            case 2:
+                strcpy(artistas[numArtistas / 4].local, linha);
+                break;
+            case 3:
+                strcpy(artistas[numArtistas / 4].albums[artistas[numArtistas / 4].numAlbums], linha);
+                artistas[numArtistas / 4].numAlbums++;
+                break;
+        }
+    }
+
+    fclose(arquivo);
+    return numArtistas / 4;
+}
+
+void salvarArtistas(Artista artistas[], int numArtistas) {
+    FILE *arquivo = fopen("artistas.txt", "w");
+    if (arquivo == NULL) {
+        printf("Erro ao abrir o arquivo artistas.txt para escrita.\n");
+        return;
+    }
+
+    for (int i = 0; i < numArtistas; i++) {
+        fprintf(arquivo, "%s\n%s\n%s\n", artistas[i].nome, artistas[i].genero, artistas[i].local);
+        for (int j = 0; j < artistas[i].numAlbums; j++) {
+            fprintf(arquivo, "%s\n", artistas[i].albums[j]);
+        }
+        fprintf(arquivo, "===========\n");
+    }
+
+    fclose(arquivo);
+}
+
+void inserirArtista(Artista artistas[], int *numArtistas) {
+    if (*numArtistas >= MAX_ARTISTAS) {
+        printf("Limite de artistas atingido. Impossível adicionar mais artistas.\n");
+        return;
+    }
+
+    Artista novoArtista;
+    printf("Digite o nome do novo artista: ");
+    fgets(novoArtista.nome, sizeof(novoArtista.nome), stdin);
+    novoArtista.nome[strcspn(novoArtista.nome, "\n")] = '\0';
+
+    printf("Digite o gênero musical: ");
+    fgets(novoArtista.genero, sizeof(novoArtista.genero), stdin);
+    novoArtista.genero[strcspn(novoArtista.genero, "\n")] = '\0';
+
+    printf("Digite o local de criação/nascimento: ");
+    fgets(novoArtista.local, sizeof(novoArtista.local), stdin);
+    novoArtista.local[strcspn(novoArtista.local, "\n")] = '\0';
+
+    printf("Digite os álbuns do artista (digite 'fim' para parar):\n");
+    int numAlbums = 0;
+    while (1) {
+        printf("Álbum %d: ", numAlbums + 1);
+        fgets(novoArtista.albums[numAlbums], sizeof(novoArtista.albums[numAlbums]), stdin);
+        novoArtista.albums[numAlbums][strcspn(novoArtista.albums[numAlbums], "\n")] = '\0';
+        if (strcmp(novoArtista.albums[numAlbums], "fim") == 0 || numAlbums >= MAX_ALBUMS - 1) {
+            break;
+        }
+        numAlbums++;
+    }
+    novoArtista.numAlbums = numAlbums;
+
+    artistas[*numArtistas] = novoArtista;
+    (*numArtistas)++;
+
+    qsort(artistas, *numArtistas, sizeof(Artista), compararNomes);
+
+    salvarArtistas(artistas, *numArtistas);
+    printf("Artista inserido com sucesso!\n");
+}
+
+int buscarArtistaBinario(Artista artistas[], int numArtistas, const char *nome) {
+    int inicio = 0;
+    int fim = numArtistas - 1;
+
+    while (inicio <= fim) {
+        int meio = (inicio + fim) / 2;
+        int comparacao = strcmp(artistas[meio].nome, nome);
+
+        if (comparacao == 0) {
+            return meio;
+        } else if (comparacao < 0) {
+            inicio = meio + 1;
+        } else {
+            fim = meio - 1;
+        }
+    }
+
+    return -1;
+}
+
+void removerArtista(Artista artistas[], int *numArtistas) {
+    char nomeRemover[MAX_NOME];
+    printf("Digite o nome do artista que deseja remover: ");
+    fgets(nomeRemover, sizeof(nomeRemover), stdin);
+    nomeRemover[strcspn(nomeRemover, "\n")] = '\0'; // Remover quebra de linha
+
+    int posicao = buscarArtistaBinario(artistas, *numArtistas, nomeRemover);
+    if (posicao == -1) {
+        printf("Artista não encontrado.\n");
+        return;
+    }
+
+    for (int i = posicao; i < *numArtistas - 1; i++) {
+        artistas[i] = artistas[i + 1];
+    }
+
+    (*numArtistas)--;
+
+    salvarArtistas(artistas, *numArtistas);
+    printf("Artista removido com sucesso!\n");
+}
+
+void editarArtista(Artista artistas[], int numArtistas) {
+    char nomeEditar[MAX_NOME];
+    printf("Digite o nome do artista que deseja editar: ");
+    fgets(nomeEditar, sizeof(nomeEditar), stdin);
+    nomeEditar[strcspn(nomeEditar, "\n")] = '\0';
+
+    int posicao = buscarArtistaBinario(artistas, numArtistas, nomeEditar);
+    if (posicao == -1) {
+        printf("Artista não encontrado.\n");
+        return;
+    }
+
+    printf("Digite o novo nome do artista: ");
+    fgets(artistas[posicao].nome, sizeof(artistas[posicao].nome), stdin);
+    artistas[posicao].nome[strcspn(artistas[posicao].nome, "\n")] = '\0';
+
+    printf("Digite o novo gênero musical: ");
+    fgets(artistas[posicao].genero, sizeof(artistas[posicao].genero), stdin);
+    artistas[posicao].genero[strcspn(artistas[posicao].genero, "\n")] = '\0';
+
+    printf("Digite o novo local de criação/nascimento: ");
+    fgets(artistas[posicao].local, sizeof(artistas[posicao].local), stdin);
+    artistas[posicao].local[strcspn(artistas[posicao].local, "\n")] = '\0';
+
+    printf("Digite os novos álbuns do artista (digite 'fim' para parar):\n");
+    int numAlbums = 0;
+    while (1) {
+        printf("Álbum %d: ", numAlbums + 1);
+        fgets(artistas[posicao].albums[numAlbums], sizeof(artistas[posicao].albums[numAlbums]), stdin);
+        artistas[posicao].albums[numAlbums][strcspn(artistas[posicao].albums[numAlbums], "\n")] = '\0';
+        if (strcmp(artistas[posicao].albums[numAlbums], "fim") == 0 || numAlbums >= MAX_ALBUMS - 1) {
+            break;
+        }
+        numAlbums++;
+    }
+    artistas[posicao].numAlbums = numAlbums;
+
+    qsort(artistas, numArtistas, sizeof(Artista), compararNomes);
+
+    salvarArtistas(artistas, numArtistas);
+    printf("Detalhes do artista editados com sucesso!\n");
+}
+
+void buscarAlbum(Artista artistas[], int numArtistas) {
+    char albumBusca[MAX_NOME];
+    printf("Digite o nome do álbum que deseja buscar: ");
+    fgets(albumBusca, sizeof(albumBusca), stdin);
+    albumBusca[strcspn(albumBusca, "\n")] = '\0';
+
+    printf("Artistas que possuem o álbum '%s':\n", albumBusca);
+    int encontrado = 0;
+
+    for (int i = 0; i < numArtistas; i++) {
+        for (int j = 0; j < artistas[i].numAlbums; j++) {
+            if (strcmp(artistas[i].albums[j], albumBusca) == 0) {
+                printf("- %s\n", artistas[i].nome);
+                encontrado = 1;
+                break;
+            }
+        }
+    }
+
+    if (!encontrado) {
+        printf("Álbum não encontrado em nenhum artista.\n");
+    }
+}
+
+void exibirMenu() {
+    printf("\n====== MENU ======\n");
+    printf("1. Inserir novo artista\n");
+    printf("2. Remover um artista\n");
+    printf("3. Editar detalhes de um artista\n");
+    printf("4. Busca binária por um artista\n");
+    printf("5. Busca sequencial por um álbum\n");
+    printf("6. Sair\n");
+    printf("===================\n");
+    printf("Escolha uma opção: ");
+}
+
+int main() {
+    Artista artistas[MAX_ARTISTAS];
+    int numArtistas = lerArtistas(artistas);
+
+    int escolha;
+    do {
+        exibirMenu();
+        scanf("%d", &escolha);
+        getchar();
+
+        switch (escolha) {
+            case 1:
+                inserirArtista(artistas, &numArtistas);
+                break;
+            case 2:
+                removerArtista(artistas, &numArtistas);
+                break;
+            case 3:
+                editarArtista(artistas, numArtistas);
+                break;
+            case 4: {
+                char nomeBusca[MAX_NOME];
+                printf("Digite o nome do artista que deseja buscar: ");
+                fgets(nomeBusca, sizeof(nomeBusca), stdin);
+                nomeBusca[strcspn(nomeBusca, "\n")] = '\0';
+
+                int posicao = buscarArtistaBinario(artistas, numArtistas, nomeBusca);
+                if (posicao == -1) {
+                    printf("Artista não encontrado.\n");
+                } else {
+                    printf("Artista encontrado na posição: %d\n", posicao + 1);
+                }
+                break;
+            }
+            case 5:
+                buscarAlbum(artistas, numArtistas);
+                break;
+            case 6:
+                printf("Saindo do programa...\n");
+                break;
+            default:
+                printf("Opção inválida. Por favor, escolha uma opção válida.\n");
+        }
+    } while (escolha != 6);
+
+    return 0;
+}
